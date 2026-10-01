@@ -1,0 +1,23 @@
+[package]
+name = "nrem"
+version = "0.0.0"
+edition = "2024"
+license = "MIT"
+description = "A system that evaluates/parses memories"
+readme = "README.md"
+documentation = "https://docs.rs/nrem"
+homepage = "https://www.github.com/aacebo/nrem"
+repository = "https://www.github.com/aacebo/nrem"
+keywords = ["memory", "git", "rem", "nrem", "neuro"]
+
+[[bin]]
+name = "nrem"
+path = "src/cli.rs"
+required-features = ["cli"]
+
+[features]
+default = []
+cli = ["dep:clap"]
+
+[dependencies]
+clap = { version = "4", features = ["derive"], optional = true }
