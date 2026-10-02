@@ -15,6 +15,9 @@ name = "nrem"
 path = "src/cli.rs"
 required-features = ["cli"]
 
+[lints.clippy]
+len_without_is_empty = "allow"
+
 [features]
 default = []
 cli = ["dep:clap"]
