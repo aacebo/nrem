@@ -1,13 +1,44 @@
 use crate::{Encode, Error, FileMode, ObjectId, Timestamp};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Index(Vec<IndexEntry>);
 
-impl std::ops::Deref for Index {
-    type Target = [IndexEntry];
+impl Index {
+    pub fn from_slice(items: impl AsRef<[IndexEntry]>) -> Self {
+        Self(items.as_ref().to_vec())
+    }
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn position(&self, path: impl AsRef<[u8]>) -> Option<usize> {
+        let path = path.as_ref().to_vec();
+        self.0.binary_search_by(|entry| entry.path.cmp(&path)).ok()
+    }
+
+    pub fn find(&self, path: impl AsRef<[u8]>) -> Option<&IndexEntry> {
+        let path = path.as_ref().to_vec();
+        let i = self.0.binary_search_by(|entry| entry.path.cmp(&path)).ok()?;
+        self.0.get(i)
+    }
+
+    pub fn insert(&mut self, entry: IndexEntry) {
+        self.0.push(entry);
+        self.0
+            .sort_by(|a, b| a.path.cmp(&b.path).then_with(|| a.flags.stage.cmp(&b.flags.stage)));
+    }
+
+    pub fn remove(&mut self, path: impl AsRef<[u8]>) -> Option<IndexEntry> {
+        let Some(i) = self.position(path) else {
+            return None;
+        };
+
+        Some(self.0.remove(i))
     }
 }
 
@@ -83,7 +114,7 @@ impl Encode for IndexEntry {
 }
 
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IndexStage {
     Normal,
     Base,
