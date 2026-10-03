@@ -22,7 +22,7 @@ impl Encode for Tree {
 }
 
 impl Decode for Tree {
-    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+    fn decode(r: &mut impl std::io::BufRead) -> Result<Self, Error> {
         let mut entries = Vec::new();
 
         while let Ok(entry) = TreeEntry::decode(r) {
@@ -74,7 +74,7 @@ impl Encode for TreeEntry {
 }
 
 impl Decode for TreeEntry {
-    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+    fn decode(r: &mut impl std::io::BufRead) -> Result<Self, Error> {
         let mut r = std::io::BufReader::new(r);
         let mode = FileMode::decode(&mut r)?;
         r.consume_required(b" ")?;

@@ -32,7 +32,7 @@ impl Encode for Tag {
 }
 
 impl Decode for Tag {
-    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+    fn decode(r: &mut impl std::io::BufRead) -> Result<Self, Error> {
         let mut r = std::io::BufReader::new(r);
         let object = ObjectRef::decode(&mut r)?;
 

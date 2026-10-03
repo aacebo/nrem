@@ -46,7 +46,7 @@ impl Encode for FileMode {
 }
 
 impl Decode for FileMode {
-    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+    fn decode(r: &mut impl std::io::BufRead) -> Result<Self, Error> {
         let mut buf = [0u8; 4];
         r.read_exact(&mut buf)?;
 

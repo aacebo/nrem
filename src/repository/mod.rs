@@ -6,6 +6,7 @@ pub use refs::*;
 
 use crate::{Error, FileSystem};
 
+#[allow(unused)]
 pub struct Repository<'a, Fs: FileSystem> {
     fs: &'a mut Fs,
     root: std::path::PathBuf,

@@ -61,22 +61,16 @@ impl Encode for Blob {
 }
 
 impl Decode for Blob {
-    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+    fn decode(r: &mut impl std::io::BufRead) -> Result<Self, Error> {
         let mut r = std::io::BufReader::new(r);
         r.consume_required(b"blob ")?;
 
         let mut buf = Vec::new();
         r.read_until_consume(b'\0', &mut buf)?;
 
-        let text = std::str::from_utf8(&buf)
-            .map_err(|_| Error::custom("length is not UTF-8"))?;
-
-        let len: u32 = text
-            .parse()
-            .map_err(|_| Error::custom("invalid length"))?;
-
-        let mut data = Vec::with_capacity(len as usize);
-        data.resize(len as usize, 0);
+        let text = std::str::from_utf8(&buf).map_err(|_| Error::custom("length is not UTF-8"))?;
+        let len: u32 = text.parse().map_err(|_| Error::custom("invalid length"))?;
+        let mut data = vec![0; len as usize];
         r.read_exact(&mut data)?;
         Ok(Self(data))
     }

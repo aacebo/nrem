@@ -2,6 +2,7 @@ use std::io::{BufRead, Read};
 
 use crate::{BufReadExt, Decode, Encode, Error, FileSystem, ObjectId};
 
+#[allow(unused)]
 pub struct Refs<'a, Fs: FileSystem> {
     fs: &'a Fs,
 }
@@ -22,7 +23,7 @@ impl Encode for Ref {
 }
 
 impl Decode for Ref {
-    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+    fn decode(r: &mut impl std::io::BufRead) -> Result<Self, Error> {
         let mut r = std::io::BufReader::new(r);
         let mut buf = Vec::new();
         r.read_until_consume(b' ', &mut buf)?;
@@ -74,7 +75,7 @@ impl Encode for RefTarget {
 }
 
 impl Decode for RefTarget {
-    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+    fn decode(r: &mut impl std::io::BufRead) -> Result<Self, Error> {
         let mut r = std::io::BufReader::new(r);
 
         if r.fill_buf()?.starts_with(b"ref:") {
@@ -118,14 +119,14 @@ impl std::fmt::Display for RefName {
 impl Encode for RefName {
     fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
         match self {
-            Self::String(v) => Ok(w.write_all(&v.as_bytes())?),
+            Self::String(v) => Ok(w.write_all(v.as_bytes())?),
             Self::Bytes(v) => Ok(w.write_all(v.as_slice())?),
         }
     }
 }
 
 impl Decode for RefName {
-    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+    fn decode(r: &mut impl std::io::BufRead) -> Result<Self, Error> {
         let mut buf = Vec::new();
         r.read_to_end(&mut buf)?;
 

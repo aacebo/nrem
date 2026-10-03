@@ -56,7 +56,7 @@ impl Encode for Object {
 }
 
 impl Decode for Object {
-    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+    fn decode(r: &mut impl std::io::BufRead) -> Result<Self, Error> {
         let mut r = std::io::BufReader::new(r);
 
         match r.fill_buf()? {
@@ -81,6 +81,7 @@ impl ObjectId {
     pub fn from_hex_bytes(bytes: [u8; 64]) -> Result<Self, Error> {
         let mut out = [0u8; 32];
 
+        #[allow(clippy::chunks_exact_to_as_chunks)]
         for (index, pair) in bytes.chunks_exact(2).enumerate() {
             out[index] = (hex_nibble(pair[0])? << 4) | hex_nibble(pair[1])?;
         }
@@ -117,7 +118,7 @@ impl Encode for ObjectId {
 }
 
 impl Decode for ObjectId {
-    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+    fn decode(r: &mut impl std::io::BufRead) -> Result<Self, Error> {
         let mut buf = [0u8; 32];
         r.read_exact(&mut buf)?;
         Ok(Self(buf))
@@ -142,7 +143,7 @@ impl Encode for ObjectRef {
 }
 
 impl Decode for ObjectRef {
-    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+    fn decode(r: &mut impl std::io::BufRead) -> Result<Self, Error> {
         let mut r = std::io::BufReader::new(r);
         r.consume_required(b"object ")?;
         let mut buf = [0u8; 64];
@@ -174,7 +175,7 @@ impl std::fmt::Display for ObjectType {
 }
 
 impl Decode for ObjectType {
-    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+    fn decode(r: &mut impl std::io::BufRead) -> Result<Self, Error> {
         let mut r = std::io::BufReader::new(r).take(6);
         let buf = r.fill_buf()?;
 

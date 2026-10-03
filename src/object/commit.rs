@@ -65,7 +65,7 @@ impl Encode for Commit {
 }
 
 impl Decode for Commit {
-    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+    fn decode(r: &mut impl std::io::BufRead) -> Result<Self, Error> {
         let mut r = std::io::BufReader::new(r);
         let mut buf = [0u8; 64];
         r.consume_required(b"tree ")?;
@@ -126,7 +126,7 @@ pub struct Header {
 }
 
 impl Decode for Header {
-    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+    fn decode(r: &mut impl std::io::BufRead) -> Result<Self, Error> {
         let mut r = std::io::BufReader::new(r);
         let mut buf = Vec::new();
 
@@ -170,7 +170,7 @@ impl Encode for Signature {
 }
 
 impl Decode for Signature {
-    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+    fn decode(r: &mut impl std::io::BufRead) -> Result<Self, Error> {
         let mut r = std::io::BufReader::new(r);
         let mut buf = Vec::new();
 

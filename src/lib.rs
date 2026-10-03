@@ -15,7 +15,7 @@ pub trait Encode {
 }
 
 pub trait Decode: Sized {
-    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error>;
+    fn decode(r: &mut impl std::io::BufRead) -> Result<Self, Error>;
 }
 
 pub trait BufReadExt: std::io::BufRead {
