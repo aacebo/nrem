@@ -31,11 +31,7 @@ impl FileSystem for LocalFileSystem {
     fn remove(&mut self, path: &std::path::Path) -> Result<(), Error> {
         match self.metadata(path)?.ty {
             FileType::Directory => Ok(std::fs::remove_dir(path)?),
-            FileType::File => Ok(std::fs::remove_file(path)?),
-            FileType::Symlink => {
-                let next = std::fs::read_link(path)?;
-                self.remove(&next)
-            }
+            FileType::File | FileType::Symlink => Ok(std::fs::remove_file(path)?),
         }
     }
 }

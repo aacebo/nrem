@@ -53,7 +53,7 @@ impl std::fmt::Debug for Blob {
 impl Encode for Blob {
     fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
         w.write_all(b"blob ")?;
-        w.write_all(&(self.0.len() as u32).to_be_bytes())?;
+        write!(w, "{}", self.0.len())?;
         w.write_all(b"\0")?;
         w.write_all(&self.0)?;
         Ok(())
@@ -65,13 +65,18 @@ impl Decode for Blob {
         let mut r = std::io::BufReader::new(r);
         r.consume_required(b"blob ")?;
 
-        let mut len = [0u8; 4];
-        r.read_exact(&mut len)?;
+        let mut buf = Vec::new();
+        r.read_until_consume(b'\0', &mut buf)?;
 
-        let len = u32::from_be_bytes(len);
-        r.consume_required(b"\n")?;
+        let text = std::str::from_utf8(&buf)
+            .map_err(|_| Error::custom("length is not UTF-8"))?;
+
+        let len: u32 = text
+            .parse()
+            .map_err(|_| Error::custom("invalid length"))?;
 
         let mut data = Vec::with_capacity(len as usize);
+        data.resize(len as usize, 0);
         r.read_exact(&mut data)?;
         Ok(Self(data))
     }

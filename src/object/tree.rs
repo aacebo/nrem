@@ -77,7 +77,6 @@ impl Decode for TreeEntry {
     fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
         let mut r = std::io::BufReader::new(r);
         let mode = FileMode::decode(&mut r)?;
-
         r.consume_required(b" ")?;
 
         let mut name = Vec::new();

@@ -77,6 +77,20 @@ impl ObjectId {
     pub const fn len(self) -> usize {
         self.0.len()
     }
+
+    pub fn from_hex_bytes(bytes: [u8; 64]) -> Result<Self, Error> {
+        let mut out = [0u8; 32];
+
+        for (index, pair) in bytes.chunks_exact(2).enumerate() {
+            out[index] = (hex_nibble(pair[0])? << 4) | hex_nibble(pair[1])?;
+        }
+
+        Ok(Self(out))
+    }
+
+    pub fn to_hex(self) -> String {
+        self.0.iter().map(|b| format!("{b:02x}")).collect()
+    }
 }
 
 impl std::fmt::Debug for ObjectId {
@@ -119,7 +133,7 @@ pub struct ObjectRef {
 impl Encode for ObjectRef {
     fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
         w.write_all(b"object ")?;
-        self.id.encode(w)?;
+        w.write_all(self.id.to_hex().as_bytes())?;
         w.write_all(b"\n")?;
         w.write_all(b"type ")?;
         self.ty.encode(w)?;
@@ -130,13 +144,12 @@ impl Encode for ObjectRef {
 impl Decode for ObjectRef {
     fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
         let mut r = std::io::BufReader::new(r);
-
         r.consume_required(b"object ")?;
-        let id = ObjectId::decode(&mut r)?;
-
-        r.consume_required(b"type ")?;
+        let mut buf = [0u8; 64];
+        r.read_exact(&mut buf)?;
+        let id = ObjectId::from_hex_bytes(buf)?;
+        r.consume_required(b"\ntype ")?;
         let ty = ObjectType::decode(&mut r)?;
-
         Ok(Self { id, ty })
     }
 }
@@ -191,5 +204,14 @@ impl Encode for ObjectType {
             Self::Commit => Ok(w.write_all(b"commit")?),
             Self::Tag => Ok(w.write_all(b"tag")?),
         }
+    }
+}
+
+fn hex_nibble(byte: u8) -> Result<u8, Error> {
+    match byte {
+        b'0'..=b'9' => Ok(byte - b'0'),
+        b'a'..=b'f' => Ok(byte - b'a' + 10),
+        b'A'..=b'F' => Ok(byte - b'A' + 10),
+        _ => Err(Error::custom("invalid hexadecimal object ID")),
     }
 }

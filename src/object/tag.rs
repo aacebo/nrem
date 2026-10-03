@@ -36,20 +36,9 @@ impl Decode for Tag {
         let mut r = std::io::BufReader::new(r);
         let object = ObjectRef::decode(&mut r)?;
 
-        r.consume_required(b"\n")?;
-
-        let mut buf = Vec::new();
-
-        r.read_until_consume(b' ', &mut buf)?;
-
-        if &buf != b"tag" {
-            return Err(Error::custom("expected `tag`"));
-        }
-
+        r.consume_required(b"\ntag ")?;
         let mut name = Vec::new();
-
         r.read_until_consume(b'\n', &mut name)?;
-
         let mut tagger = None;
 
         if r.fill_buf()?.starts_with(b"tagger") {

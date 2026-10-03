@@ -36,12 +36,12 @@ pub struct Commit {
 impl Encode for Commit {
     fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
         w.write_all(b"tree ")?;
-        self.tree_id.encode(w)?;
+        w.write_all(self.tree_id.to_hex().as_bytes())?;
         w.write_all(b"\n")?;
 
         for parent in &self.parents {
             w.write_all(b"parent ")?;
-            parent.encode(w)?;
+            w.write_all(parent.to_hex().as_bytes())?;
             w.write_all(b"\n")?;
         }
 
@@ -67,16 +67,20 @@ impl Encode for Commit {
 impl Decode for Commit {
     fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
         let mut r = std::io::BufReader::new(r);
+        let mut buf = [0u8; 64];
         r.consume_required(b"tree ")?;
+        r.read_exact(&mut buf)?;
 
-        let tree_id = ObjectId::decode(&mut r)?;
+        let tree_id = ObjectId::from_hex_bytes(buf)?;
         r.consume_required(b"\n")?;
 
         let mut parents = Vec::new();
 
         while r.fill_buf()?.starts_with(b"parent") {
+            let mut buf = [0u8; 64];
             r.consume_required(b"parent ")?;
-            parents.push(ObjectId::decode(&mut r)?);
+            r.read_exact(&mut buf)?;
+            parents.push(ObjectId::from_hex_bytes(buf)?);
             r.consume_required(b"\n")?;
         }
 
@@ -138,9 +142,9 @@ impl Decode for Header {
 
 impl Encode for Header {
     fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
-        w.write_all(self.name.as_bytes());
-        w.write_all(b" ");
-        w.write_all(&self.value);
+        w.write_all(self.name.as_bytes())?;
+        w.write_all(b" ")?;
+        w.write_all(&self.value)?;
         Ok(())
     }
 }

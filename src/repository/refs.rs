@@ -29,7 +29,7 @@ impl Decode for Ref {
 
         let mut lr = std::io::BufReader::new(buf.as_slice());
         let name = RefName::decode(&mut lr)?;
-        r.consume_required(b"->")?;
+        r.consume_required(b"-> ")?;
 
         let mut buf = Vec::new();
         r.read_to_end(&mut buf)?;
@@ -64,7 +64,7 @@ impl std::fmt::Display for RefTarget {
 impl Encode for RefTarget {
     fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
         match self {
-            Self::Direct(v) => v.encode(w),
+            Self::Direct(v) => Ok(w.write_all(v.to_hex().as_bytes())?),
             Self::Symbolic(v) => {
                 w.write_all(b"ref: ")?;
                 v.encode(w)
@@ -81,7 +81,9 @@ impl Decode for RefTarget {
             r.consume_required(b"ref: ")?;
             Ok(Self::Symbolic(RefName::decode(&mut r)?))
         } else {
-            Ok(Self::Direct(ObjectId::decode(&mut r)?))
+            let mut buf = [0u8; 64];
+            r.read_exact(&mut buf)?;
+            Ok(Self::Direct(ObjectId::from_hex_bytes(buf)?))
         }
     }
 }
