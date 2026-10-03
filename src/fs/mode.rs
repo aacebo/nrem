@@ -1,4 +1,4 @@
-use crate::Encode;
+use crate::{Decode, Encode, Error};
 
 /// Unix-style mode encoded as ASCII in the tree object.
 #[repr(u32)]
@@ -39,13 +39,24 @@ impl std::fmt::Display for FileMode {
 }
 
 impl Encode for FileMode {
-    fn encode(&self, w: &mut impl std::io::Write) -> std::io::Result<()> {
-        match self {
-            Self::Default => w.write_all(b"100644"),
-            Self::Executable => w.write_all(b"100755"),
-            Self::Symlink => w.write_all(b"120000"),
-            Self::Tree => w.write_all(b"040000"),
-            Self::Gitlink => w.write_all(b"160000"),
+    fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
+        w.write_all(&self.to_bits().to_be_bytes())?;
+        Ok(())
+    }
+}
+
+impl Decode for FileMode {
+    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+        let mut buf = [0u8; 4];
+        r.read_exact(&mut buf)?;
+
+        match u32::from_be_bytes(buf) {
+            0o100644 => Ok(Self::Default),
+            0o040000 => Ok(Self::Tree),
+            0o100755 => Ok(Self::Executable),
+            0o120000 => Ok(Self::Symlink),
+            0o160000 => Ok(Self::Gitlink),
+            v => Err(Error::custom(format!("expected file mode, received invalid {v}"))),
         }
     }
 }

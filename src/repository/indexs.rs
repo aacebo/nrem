@@ -34,16 +34,12 @@ impl Index {
     }
 
     pub fn remove(&mut self, path: impl AsRef<[u8]>) -> Option<IndexEntry> {
-        let Some(i) = self.position(path) else {
-            return None;
-        };
-
-        Some(self.0.remove(i))
+        Some(self.0.remove(self.position(path)?))
     }
 }
 
 impl Encode for Index {
-    fn encode(&self, w: &mut impl std::io::Write) -> std::io::Result<()> {
+    fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
         for entry in &self.0 {
             entry.encode(w)?;
         }
@@ -71,7 +67,7 @@ pub struct IndexEntry {
 }
 
 impl Encode for IndexEntry {
-    fn encode(&self, w: &mut impl std::io::Write) -> std::io::Result<()> {
+    fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
         let mut written = 0usize;
 
         macro_rules! write_u32 {
@@ -109,7 +105,8 @@ impl Encode for IndexEntry {
         // v2/v3 entries are padded so each entry's total size
         // is a multiple of 8 bytes.
         let padding = (8 - (written % 8)) % 8;
-        w.write_all(&b"\0".repeat(padding))
+        w.write_all(&b"\0".repeat(padding))?;
+        Ok(())
     }
 }
 
@@ -163,7 +160,8 @@ impl IndexFlags {
 }
 
 impl Encode for IndexFlags {
-    fn encode(&self, w: &mut impl std::io::Write) -> std::io::Result<()> {
-        w.write_all(&self.to_bits().to_be_bytes())
+    fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
+        w.write_all(&self.to_bits().to_be_bytes())?;
+        Ok(())
     }
 }

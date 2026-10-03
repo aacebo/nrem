@@ -3,12 +3,71 @@ mod commit;
 mod tag;
 mod tree;
 
+use std::io::{BufRead, Read};
+
 pub use blob::*;
 pub use commit::*;
 pub use tag::*;
 pub use tree::*;
 
-use crate::Encode;
+use crate::{Decode, Encode, Error, FromBytes, ToBytes};
+
+#[derive(Debug, Clone)]
+pub enum Object {
+    Blob(Blob),
+    Tree(Tree),
+    Commit(Commit),
+    Tag(Tag),
+}
+
+impl From<Blob> for Object {
+    fn from(value: Blob) -> Self {
+        Self::Blob(value)
+    }
+}
+
+impl From<Tree> for Object {
+    fn from(value: Tree) -> Self {
+        Self::Tree(value)
+    }
+}
+
+impl From<Commit> for Object {
+    fn from(value: Commit) -> Self {
+        Self::Commit(value)
+    }
+}
+
+impl From<Tag> for Object {
+    fn from(value: Tag) -> Self {
+        Self::Tag(value)
+    }
+}
+
+impl Encode for Object {
+    fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
+        match self {
+            Self::Blob(v) => Ok(v.encode(w)?),
+            Self::Tree(v) => Ok(v.encode(w)?),
+            Self::Commit(v) => Ok(v.encode(w)?),
+            Self::Tag(v) => Ok(v.encode(w)?),
+        }
+    }
+}
+
+impl Decode for Object {
+    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+        let mut r = std::io::BufReader::new(r);
+
+        match r.fill_buf()? {
+            v if v.starts_with(b"blob") => Ok(Blob::decode(&mut r)?.into()),
+            v if v.starts_with(b"commit") => Ok(Commit::decode(&mut r)?.into()),
+            v if v.starts_with(b"tag") => Ok(Tag::decode(&mut r)?.into()),
+            v if v.starts_with(b"tree") => Ok(Tree::decode(&mut r)?.into()),
+            _ => Err(Error::custom("expected an object")),
+        }
+    }
+}
 
 /// Represents the SHA-256 hash of an objects contents.
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -37,8 +96,65 @@ impl std::fmt::Display for ObjectId {
 }
 
 impl Encode for ObjectId {
-    fn encode(&self, w: &mut impl std::io::Write) -> std::io::Result<()> {
-        w.write_all(&self.0)
+    fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
+        w.write_all(&self.0)?;
+        Ok(())
+    }
+}
+
+impl Decode for ObjectId {
+    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+        let mut buf = [0u8; 32];
+        r.read_exact(&mut buf)?;
+        Ok(Self(buf))
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct ObjectRef {
+    pub id: ObjectId,
+    pub ty: ObjectType,
+}
+
+impl Encode for ObjectRef {
+    fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
+        w.write_all(b"object ")?;
+        self.id.encode(w)?;
+        w.write_all(b"\n")?;
+        w.write_all(b"type ")?;
+        w.write_all(&self.ty.to_bytes())?;
+        Ok(())
+    }
+}
+
+impl Decode for ObjectRef {
+    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+        let mut r = std::io::BufReader::new(r);
+        let mut buf = Vec::new();
+
+        r.read_until(b' ', &mut buf)?;
+        r.consume(1);
+
+        if &buf != b"object" {
+            return Err(Error::custom("expected `object`"));
+        }
+
+        let id = ObjectId::decode(&mut r)?;
+        r.consume(1);
+        let mut buf = Vec::new();
+
+        r.read_until(b' ', &mut buf)?;
+        r.consume(1);
+
+        if &buf != b"type" {
+            return Err(Error::custom("expected `type`"));
+        }
+
+        let mut buf = Vec::new();
+        r.read_until(b'\n', &mut buf)?;
+        let ty = ObjectType::from_bytes(&buf)?;
+
+        Ok(Self { id, ty })
     }
 }
 
@@ -61,50 +177,36 @@ impl std::fmt::Display for ObjectType {
     }
 }
 
-impl Encode for ObjectType {
-    fn encode(&self, w: &mut impl std::io::Write) -> std::io::Result<()> {
-        match self {
-            Self::Blob => w.write_all(b"blob"),
-            Self::Tree => w.write_all(b"tree"),
-            Self::Commit => w.write_all(b"commit"),
-            Self::Tag => w.write_all(b"tag"),
+impl FromBytes for ObjectType {
+    fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
+        let mut r = std::io::BufReader::new(bytes).take(6);
+        let buf = r.fill_buf()?;
+
+        if buf.starts_with(b"blob") {
+            r.consume(4);
+            Ok(Self::Blob)
+        } else if buf.starts_with(b"tree") {
+            r.consume(4);
+            Ok(Self::Tree)
+        } else if buf.starts_with(b"commit") {
+            r.consume(6);
+            Ok(Self::Commit)
+        } else if buf.starts_with(b"tag") {
+            r.consume(3);
+            Ok(Self::Tag)
+        } else {
+            Err(Error::custom("expected object type"))
         }
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct ObjectRef {
-    pub id: ObjectId,
-    pub ty: ObjectType,
-}
-
-impl Encode for ObjectRef {
-    fn encode(&self, w: &mut impl std::io::Write) -> std::io::Result<()> {
-        w.write_all(b"object ")?;
-        self.id.encode(w)?;
-        w.write_all(b"\n")?;
-
-        w.write_all(b"type ")?;
-        self.ty.encode(w)?;
-        w.write_all(b"\n")
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Object {
-    Blob(Blob),
-    Tree(Tree),
-    Commit(Commit),
-    Tag(Tag),
-}
-
-impl Encode for Object {
-    fn encode(&self, w: &mut impl std::io::Write) -> std::io::Result<()> {
+impl ToBytes for ObjectType {
+    fn to_bytes(&self) -> Vec<u8> {
         match self {
-            Self::Blob(v) => v.encode(w),
-            Self::Tree(v) => v.encode(w),
-            Self::Commit(v) => v.encode(w),
-            Self::Tag(v) => v.encode(w),
+            Self::Blob => b"blob".to_vec(),
+            Self::Tree => b"tree".to_vec(),
+            Self::Commit => b"commit".to_vec(),
+            Self::Tag => b"tag".to_vec(),
         }
     }
 }

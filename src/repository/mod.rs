@@ -1,19 +1,19 @@
-mod index;
-mod link;
+mod indexs;
+mod refs;
 
-pub use index::*;
-pub use link::*;
+pub use indexs::*;
+pub use refs::*;
 
 use crate::{Error, FileSystem};
 
-pub struct Repository<Fs: FileSystem> {
-    fs: Fs,
+pub struct Repository<'a, Fs: FileSystem> {
+    fs: &'a mut Fs,
     root: std::path::PathBuf,
     index: Index,
 }
 
-impl<Fs: FileSystem> Repository<Fs> {
-    pub fn load(fs: Fs, root: impl AsRef<std::path::Path>) -> Result<Self, Error> {
+impl<'a, Fs: FileSystem> Repository<'a, Fs> {
+    pub fn load(fs: &'a mut Fs, root: impl AsRef<std::path::Path>) -> Result<Self, Error> {
         Ok(Self {
             fs,
             root: root.as_ref().to_path_buf(),

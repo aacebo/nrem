@@ -1,4 +1,6 @@
-use crate::Encode;
+use std::io::Read;
+
+use crate::{BufReadExt, Decode, Encode, Error};
 
 /// Blob
 ///
@@ -49,10 +51,28 @@ impl std::fmt::Debug for Blob {
 }
 
 impl Encode for Blob {
-    fn encode(&self, w: &mut impl std::io::Write) -> std::io::Result<()> {
+    fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
         w.write_all(b"blob ")?;
-        w.write_all(&self.0.len().to_be_bytes())?;
+        w.write_all(&(self.0.len() as u32).to_be_bytes())?;
         w.write_all(b"\0")?;
-        w.write_all(&self.0)
+        w.write_all(&self.0)?;
+        Ok(())
+    }
+}
+
+impl Decode for Blob {
+    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+        let mut r = std::io::BufReader::new(r);
+        r.consume_required(b"blob ")?;
+
+        let mut len = [0u8; 4];
+        r.read_exact(&mut len)?;
+
+        let len = u32::from_be_bytes(len);
+        r.consume_required(b"\n")?;
+
+        let mut data = Vec::with_capacity(len as usize);
+        r.read_exact(&mut data)?;
+        Ok(Self(data))
     }
 }
