@@ -10,7 +10,7 @@ pub use commit::*;
 pub use tag::*;
 pub use tree::*;
 
-use crate::{Decode, Encode, Error, FromBytes, ToBytes};
+use crate::{BufReadExt, Decode, Encode, Error};
 
 #[derive(Debug, Clone)]
 pub enum Object {
@@ -122,7 +122,7 @@ impl Encode for ObjectRef {
         self.id.encode(w)?;
         w.write_all(b"\n")?;
         w.write_all(b"type ")?;
-        w.write_all(&self.ty.to_bytes())?;
+        self.ty.encode(w)?;
         Ok(())
     }
 }
@@ -130,29 +130,12 @@ impl Encode for ObjectRef {
 impl Decode for ObjectRef {
     fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
         let mut r = std::io::BufReader::new(r);
-        let mut buf = Vec::new();
 
-        r.read_until(b' ', &mut buf)?;
-        r.consume(1);
-
-        if &buf != b"object" {
-            return Err(Error::custom("expected `object`"));
-        }
-
+        r.consume_required(b"object ")?;
         let id = ObjectId::decode(&mut r)?;
-        r.consume(1);
-        let mut buf = Vec::new();
 
-        r.read_until(b' ', &mut buf)?;
-        r.consume(1);
-
-        if &buf != b"type" {
-            return Err(Error::custom("expected `type`"));
-        }
-
-        let mut buf = Vec::new();
-        r.read_until(b'\n', &mut buf)?;
-        let ty = ObjectType::from_bytes(&buf)?;
+        r.consume_required(b"type ")?;
+        let ty = ObjectType::decode(&mut r)?;
 
         Ok(Self { id, ty })
     }
@@ -177,9 +160,9 @@ impl std::fmt::Display for ObjectType {
     }
 }
 
-impl FromBytes for ObjectType {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
-        let mut r = std::io::BufReader::new(bytes).take(6);
+impl Decode for ObjectType {
+    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+        let mut r = std::io::BufReader::new(r).take(6);
         let buf = r.fill_buf()?;
 
         if buf.starts_with(b"blob") {
@@ -200,13 +183,13 @@ impl FromBytes for ObjectType {
     }
 }
 
-impl ToBytes for ObjectType {
-    fn to_bytes(&self) -> Vec<u8> {
+impl Encode for ObjectType {
+    fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
         match self {
-            Self::Blob => b"blob".to_vec(),
-            Self::Tree => b"tree".to_vec(),
-            Self::Commit => b"commit".to_vec(),
-            Self::Tag => b"tag".to_vec(),
+            Self::Blob => Ok(w.write_all(b"blob")?),
+            Self::Tree => Ok(w.write_all(b"tree")?),
+            Self::Commit => Ok(w.write_all(b"commit")?),
+            Self::Tag => Ok(w.write_all(b"tag")?),
         }
     }
 }

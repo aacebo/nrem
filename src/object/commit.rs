@@ -1,6 +1,6 @@
 use std::io::{BufRead, Read};
 
-use crate::{BufReadExt, Decode, Encode, Error, FromBytes, ObjectId, Timestamp, TimestampTz, ToBytes};
+use crate::{BufReadExt, Decode, Encode, Error, ObjectId, Timestamp, TimestampTz};
 
 #[derive(Debug, Clone)]
 pub struct Commit {
@@ -46,15 +46,15 @@ impl Encode for Commit {
         }
 
         w.write_all(b"author ")?;
-        w.write_all(&self.author.to_bytes())?;
+        self.author.encode(w)?;
         w.write_all(b"\n")?;
 
         w.write_all(b"committer ")?;
-        w.write_all(&self.committer.to_bytes())?;
+        self.committer.encode(w)?;
         w.write_all(b"\n")?;
 
         for header in &self.headers {
-            w.write_all(&header.to_bytes())?;
+            header.encode(w)?;
             w.write_all(b"\n")?;
         }
 
@@ -81,37 +81,26 @@ impl Decode for Commit {
         }
 
         let mut buf = Vec::new();
-        r.read_until_consume(b' ', &mut buf)?;
+        r.consume_required(b"author ")?;
+        r.read_until_consume(b'\n', &mut buf)?;
+        let mut lr = std::io::BufReader::new(buf.as_slice());
+        let author = Signature::decode(&mut lr)?;
 
-        if &buf != b"author" {
-            return Err(Error::custom("expected `author`"));
-        }
-
+        r.consume_required(b"committer ")?;
         let mut buf = Vec::new();
         r.read_until_consume(b'\n', &mut buf)?;
-
-        let author = Signature::from_bytes(&buf)?;
-        let mut buf = Vec::new();
-        r.read_until_consume(b' ', &mut buf)?;
-
-        if &buf != b"committer" {
-            return Err(Error::custom("expected `committer`"));
-        }
-
-        let mut buf = Vec::new();
-        r.read_until_consume(b'\n', &mut buf)?;
-
-        let committer = Signature::from_bytes(&buf)?;
+        let mut lr = std::io::BufReader::new(buf.as_slice());
+        let committer = Signature::decode(&mut lr)?;
         let mut headers = Vec::new();
 
         while !r.fill_buf()?.starts_with(b"\n") {
             let mut buf = Vec::new();
             r.read_until_consume(b'\n', &mut buf)?;
-            headers.push(Header::from_bytes(&buf)?);
+            let mut lr = std::io::BufReader::new(buf.as_slice());
+            headers.push(Header::decode(&mut lr)?);
         }
 
         let mut message = Vec::new();
-
         r.consume_required(b"\n")?;
         r.read_to_end(&mut message)?;
 
@@ -132,9 +121,9 @@ pub struct Header {
     pub value: Vec<u8>,
 }
 
-impl FromBytes for Header {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
-        let mut r = std::io::BufReader::new(bytes);
+impl Decode for Header {
+    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+        let mut r = std::io::BufReader::new(r);
         let mut buf = Vec::new();
 
         r.read_until_consume(b' ', &mut buf)?;
@@ -147,13 +136,12 @@ impl FromBytes for Header {
     }
 }
 
-impl ToBytes for Header {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(self.name.as_bytes());
-        bytes.extend_from_slice(b" ");
-        bytes.extend_from_slice(&self.value);
-        bytes
+impl Encode for Header {
+    fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
+        w.write_all(self.name.as_bytes());
+        w.write_all(b" ");
+        w.write_all(&self.value);
+        Ok(())
     }
 }
 
@@ -164,9 +152,22 @@ pub struct Signature {
     pub time: TimestampTz,
 }
 
-impl FromBytes for Signature {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
-        let mut r = std::io::BufReader::new(bytes);
+impl Encode for Signature {
+    fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
+        w.write_all(self.name.as_bytes())?;
+        w.write_all(b" ")?;
+        w.write_all(self.email.as_bytes())?;
+        w.write_all(b" ")?;
+        w.write_all(&self.time.secs().to_be_bytes())?;
+        w.write_all(b" ")?;
+        w.write_all(&self.time.offset().to_be_bytes())?;
+        Ok(())
+    }
+}
+
+impl Decode for Signature {
+    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+        let mut r = std::io::BufReader::new(r);
         let mut buf = Vec::new();
 
         r.read_until_consume(b' ', &mut buf)?;
@@ -193,19 +194,5 @@ impl FromBytes for Signature {
             email,
             time: TimestampTz::new(Timestamp::new(seconds, 0), offset),
         })
-    }
-}
-
-impl ToBytes for Signature {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(self.name.as_bytes());
-        bytes.extend_from_slice(b" ");
-        bytes.extend_from_slice(self.email.as_bytes());
-        bytes.extend_from_slice(b" ");
-        bytes.extend_from_slice(&self.time.secs().to_be_bytes());
-        bytes.extend_from_slice(b" ");
-        bytes.extend_from_slice(&self.time.offset().to_be_bytes());
-        bytes
     }
 }

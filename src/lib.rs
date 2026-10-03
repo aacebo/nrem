@@ -18,14 +18,6 @@ pub trait Decode: Sized {
     fn decode(r: &mut impl std::io::Read) -> Result<Self, Error>;
 }
 
-pub trait ToBytes {
-    fn to_bytes(&self) -> Vec<u8>;
-}
-
-pub trait FromBytes: Sized {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, Error>;
-}
-
 pub trait BufReadExt: std::io::BufRead {
     fn consume_required(&mut self, bytes: &[u8]) -> std::io::Result<()> {
         if !self.fill_buf()?.starts_with(bytes) {

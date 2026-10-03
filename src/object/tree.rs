@@ -84,7 +84,6 @@ impl Decode for TreeEntry {
         r.read_until_consume(b'\0', &mut name)?;
 
         let id = ObjectId::decode(&mut r)?;
-
         Ok(Self { id, name, mode })
     }
 }

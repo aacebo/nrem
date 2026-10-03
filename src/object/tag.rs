@@ -1,6 +1,6 @@
 use std::io::{BufRead, Read};
 
-use crate::{BufReadExt, Decode, Encode, Error, FromBytes, ObjectRef, Signature};
+use crate::{BufReadExt, Decode, Encode, Error, ObjectRef, Signature};
 
 #[derive(Debug, Clone)]
 pub struct Tag {
@@ -12,8 +12,6 @@ pub struct Tag {
 
 impl Encode for Tag {
     fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
-        use crate::ToBytes;
-
         self.object.encode(w)?;
 
         w.write_all(b"\n")?;
@@ -23,7 +21,7 @@ impl Encode for Tag {
 
         if let Some(tagger) = &self.tagger {
             w.write_all(b"tagger ")?;
-            w.write_all(&tagger.to_bytes())?;
+            tagger.encode(w)?;
             w.write_all(b"\n")?;
         }
 
@@ -58,7 +56,8 @@ impl Decode for Tag {
             let mut buf = Vec::new();
             r.consume_required(b"tagger ")?;
             r.read_until_consume(b'\n', &mut buf)?;
-            tagger = Some(Signature::from_bytes(&buf)?);
+            let mut lr = std::io::BufReader::new(buf.as_slice());
+            tagger = Some(Signature::decode(&mut lr)?);
         }
 
         let mut message = Vec::new();

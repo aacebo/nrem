@@ -1,4 +1,6 @@
-use crate::{Encode, Error, FileSystem, ObjectId};
+use std::io::{BufRead, Read};
+
+use crate::{BufReadExt, Decode, Encode, Error, FileSystem, ObjectId};
 
 pub struct Refs<'a, Fs: FileSystem> {
     fs: &'a Fs,
@@ -12,54 +14,29 @@ pub struct Ref {
 
 impl Encode for Ref {
     fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
-        w.write_all(self.name.as_bytes())?;
+        self.name.encode(w)?;
         w.write_all(b" -> ")?;
         self.target.encode(w)?;
         Ok(())
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
-pub enum RefName {
-    String(String),
-    Bytes(Vec<u8>),
-}
+impl Decode for Ref {
+    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+        let mut r = std::io::BufReader::new(r);
+        let mut buf = Vec::new();
+        r.read_until_consume(b' ', &mut buf)?;
 
-impl RefName {
-    pub fn from_bytes(bytes: Vec<u8>) -> Self {
-        if let Ok(name) = String::from_utf8(bytes.clone()) {
-            Self::String(name)
-        } else {
-            Self::Bytes(bytes)
-        }
-    }
+        let mut lr = std::io::BufReader::new(buf.as_slice());
+        let name = RefName::decode(&mut lr)?;
+        r.consume_required(b"->")?;
 
-    pub fn as_bytes(&self) -> &[u8] {
-        match self {
-            Self::String(v) => v.as_bytes(),
-            Self::Bytes(v) => v.as_slice(),
-        }
-    }
-}
+        let mut buf = Vec::new();
+        r.read_to_end(&mut buf)?;
 
-impl std::fmt::Debug for RefName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self}")
-    }
-}
-
-impl std::fmt::Display for RefName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::String(v) => write!(f, "{v}"),
-            Self::Bytes(v) => {
-                for byte in v {
-                    write!(f, "{byte:02x}")?;
-                }
-
-                Ok(())
-            }
-        }
+        let mut lr = std::io::BufReader::new(buf.as_slice());
+        let target = RefTarget::decode(&mut lr)?;
+        Ok(Self { name, target })
     }
 }
 
@@ -87,8 +64,73 @@ impl std::fmt::Display for RefTarget {
 impl Encode for RefTarget {
     fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
         match self {
-            Self::Direct(v) => Ok(v.encode(w)?),
-            Self::Symbolic(v) => Ok(w.write_all(v.as_bytes())?),
+            Self::Direct(v) => v.encode(w),
+            Self::Symbolic(v) => {
+                w.write_all(b"ref: ")?;
+                v.encode(w)
+            }
+        }
+    }
+}
+
+impl Decode for RefTarget {
+    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+        let mut r = std::io::BufReader::new(r);
+
+        if r.fill_buf()?.starts_with(b"ref:") {
+            r.consume_required(b"ref: ")?;
+            Ok(Self::Symbolic(RefName::decode(&mut r)?))
+        } else {
+            Ok(Self::Direct(ObjectId::decode(&mut r)?))
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub enum RefName {
+    String(String),
+    Bytes(Vec<u8>),
+}
+
+impl std::fmt::Debug for RefName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self}")
+    }
+}
+
+impl std::fmt::Display for RefName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::String(v) => write!(f, "{v}"),
+            Self::Bytes(v) => {
+                for byte in v {
+                    write!(f, "{byte:02x}")?;
+                }
+
+                Ok(())
+            }
+        }
+    }
+}
+
+impl Encode for RefName {
+    fn encode(&self, w: &mut impl std::io::Write) -> Result<(), Error> {
+        match self {
+            Self::String(v) => Ok(w.write_all(&v.as_bytes())?),
+            Self::Bytes(v) => Ok(w.write_all(v.as_slice())?),
+        }
+    }
+}
+
+impl Decode for RefName {
+    fn decode(r: &mut impl std::io::Read) -> Result<Self, Error> {
+        let mut buf = Vec::new();
+        r.read_to_end(&mut buf)?;
+
+        if let Ok(name) = String::from_utf8(buf.clone()) {
+            Ok(Self::String(name))
+        } else {
+            Ok(Self::Bytes(buf))
         }
     }
 }
